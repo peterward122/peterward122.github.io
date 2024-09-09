@@ -3,7 +3,7 @@
     "path": "C:/Users/peter/OneDrive/Desktop/peterward122.github.io/index.qmd",
     "project_path": "index.qmd",
     "type": "quarto_markdown",
-    "hash": "0",
+    "hash": "1880979784",
     "contents": "",
     "dirty": false,
     "created": 1725837512590.0,
@@ -17,15 +17,15 @@
         "docOutlineVisible": "1",
         "rmdVisualCollapsedChunks": "",
         "rmdVisualModeLocation": "482:0",
-        "cursorPosition": "18,0",
+        "cursorPosition": "9,45",
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1725845267,
+    "lastKnownWriteTime": 1725846873,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1725845267982,
+    "last_content_update": 1725846873121,
     "read_only": false,
     "read_only_alternatives": []
 }

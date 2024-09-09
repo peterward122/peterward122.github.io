@@ -4,7 +4,7 @@ title: "Peter Ward"
 about:
   id: intro-heading
   template: trestles
-  image: Images/profilepic.jpg
+  image: _site/images/profilepic.jpg
   links:
     - icon: instagram
       href: https://instagram.com/peterward_5
