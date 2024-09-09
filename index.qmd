@@ -1,11 +1,23 @@
 ---
-title: "peterward122.github.io"
+title: "Peter Ward"
+
+about:
+  id: intro-heading
+  template: trestles
+  image: Images/profilepic.jpg
+  links:
+    - icon: instagram
+      href: https://instagram.com/peterward_5
+    - icon: github
+      href: https://github.com/peterward122
 ---
 
-This is a Quarto website.
+# About Me
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+I am a current Junior at Macalester College. I am a declared Economics and Statistics major. I am also a member of the baseball team at Macalester. I am interested in an internship in the data science field this summer.
 
-```{r}
-1 + 1
-```
+## **Education**
+
+Macalester College \| St. Paul MN
+
+B.A. in Economics, Statistics \| Sept 2022 - May 2026
