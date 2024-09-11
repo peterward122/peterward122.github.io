@@ -4,7 +4,7 @@
     "href": "index.html",
     "title": "Peter Ward",
     "section": "",
-    "text": "I am a current Junior at Macalester College. I am a declared Economics and Statistics major. I am also a member of the baseball team at Macalester. I am interested in an internship in the data science field this summer.\n\n\nMacalester College | St. Paul MN\nB.A. in Economics, Statistics | Sept 2022 - May 2026"
+    "text": "I am a current Junior at Macalester College. I am an Economics and Statistics major. I am also a member of the baseball team at Macalester. I am interested in an internship in the data science field this summer. I have experience using the R programming language. See the projects tab for projects I have completed!\n\n\nDick’s Sporting Goods | Summer 2023\nInternship at Hernando County Courthouse | Summer 2024\nDirty Dog’s Car Wash | Summer 2024\n\n\n\nMacalester College | St. Paul MN\nB.A. in Economics, Statistics | Sept 2022 - May 2026"
   },
   {
     "objectID": "posts.html",
@@ -16,9 +16,9 @@
   {
     "objectID": "projects.html",
     "href": "projects.html",
-    "title": "",
+    "title": "Projects",
     "section": "",
-    "text": "This page contains any projects I have worked on."
+    "text": "This page contains projects and tidy tuesdays I have worked on."
   },
   {
     "objectID": "index.html#education",
@@ -30,8 +30,15 @@
   {
     "objectID": "about.html",
     "href": "about.html",
-    "title": "About",
+    "title": "About Me",
     "section": "",
-    "text": "This site is intended to display projects I have created in the field of data science."
+    "text": "Attached below is a link to my most recent resume:\nLink to my Resume"
+  },
+  {
+    "objectID": "index.html#work-experience",
+    "href": "index.html#work-experience",
+    "title": "Peter Ward",
+    "section": "",
+    "text": "Dick’s Sporting Goods | Summer 2023\nInternship at Hernando County Courthouse | Summer 2024\nDirty Dog’s Car Wash | Summer 2024"
   }
 ]

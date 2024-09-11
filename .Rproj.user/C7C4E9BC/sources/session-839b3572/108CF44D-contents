@@ -1,0 +1,294 @@
+---
+title: "Men's March Madness Competitiveness from 1985 to 2016"
+author: "by Julia Coelho, Wesley Stone, and Peter Ward"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(mgcv)
+options(digits = 6)
+library(lubridate)
+library(viridis)
+library(tidyverse)
+
+MarchMadness <- read_csv('marchmadness.csv')
+```
+## March Madness and Dataset Context
+
+The NCAA Division I men’s basketball tournament, branded as NCAA March Madness and commonly called March Madness, is a single-elimination tournament played in the United States to determine the men’s college basketball national champion of the Division I level in the National Collegiate Athletic Association (Wikipedia). A total of 64 teams participate in the tournament, which consists of several rounds starting with the Round of 64 and ending with the National Championship. Teams are seeded 1-16, with 4 teams occupying each seed number, by a committee according to their regular season record, the strength of schedule, advanced metrics, etc. The first-round matchups are organized by seed, with 1 seeds playing 16 seeds, 2 seeds playing 15 seeds, and so on. The last team standing is declared the Men’s Division I Basketball Champion for that year.
+
+Our dataset consists of information on every game played in each Men’s March Madness basketball tournament from 1985-2016. Each unit of observation is a single March Madness game. Variables contained in our dataset include the date of each game, the losing, and winning team names, the losing and winning scores, the round of the tournament, the region of the tournament, and whether or not the game went to overtime. We found and acquired this dataset on dataworld.com under the following URL: https://data.world/sports/ncaa-mens-march-madness.
+
+Perhaps the most exciting and entertaining aspect of the annual Men’s March Madness basketball tournament is the thrilling games that go down to the wire and the stunning upsets that seem to happen more with each passing year. With that we ask,
+
+> Has the Men’s March Madness basketball tournament become more competitive from 1985 to 2016?
+
+We believe this question is quite interesting and relevant to the tournament, as it is largely unpredictable on a year-by-year basis, so we wanted to look at tournament trends over the course of 30 years instead, and analyze whether or not they are significant.
+
+```{r, echo=FALSE}
+MarchMadness <- MarchMadness %>%
+  rename(LosingSeed = "Losing Seed") %>%
+  rename(WinningSeed = "Winning Seed") %>%
+  rename(LosingScore = "Losing Score") %>%
+  rename(WinningScore = "Winning Score")
+
+MarchMadness <- MarchMadness %>%
+  mutate(ScoreDifferential = WinningScore - LosingScore)
+
+MarchMadness <- MarchMadness %>%
+  mutate(YMDDate = as.Date(Date, "%m/%d/%y")) %>%
+  mutate(Year = year(YMDDate))
+
+MarchMadnessPivot <- MarchMadness %>%
+  select(YMDDate, Year, LosingScore, WinningScore) %>%
+  pivot_longer(cols = c(3:4), names_to = "WinorLoss", values_to = "Score")
+```
+
+## Difference in scores by year
+
+```{r, echo=FALSE, message = FALSE, fig.alt = 'Scatterplot displaying the scores of the winning and losing teams in every year from 1985-2016, with a trend line representing the trends in winning and losing score over time.'}
+ggplot(MarchMadnessPivot, aes(x = YMDDate, y = Score, color = fct_rev(factor(WinorLoss)))) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(se = FALSE) +
+  scale_color_manual(values = c("#2eb27b", "#450c54"),   name = "Type of Score", labels=c('Winning Score', 'Losing Score'))+
+  labs(x = "Year", caption = 'Each game has two points, winning score and losing score') +
+  ggtitle("Men's March Madness Scores from 1985 to 2016", subtitle = 'Have scores increased or decreased?') + 
+  theme_minimal()
+```
+
+We first wanted to see if, over time, scores are increasing or decreasing. From the graph, we can see that scores are fluctuating slightly over the years but there is no clear trend over the three decades. If the games were becoming more competitive, we would assume there's a larger change over the years. Winning scores and losing scores in each game are increasing and decreasing together, implying score differentials are staying consistent.
+
+## Score differentials by year
+
+```{r, echo=FALSE, message = FALSE, fig.alt = 'Scatterplot displaying the score differential of every game played from 1985 to 2016, with a trend line representing the trend of the score differentials over time.'}
+ggplot(MarchMadness, aes(x = YMDDate, y = ScoreDifferential)) +
+  geom_point(alpha = 0.5, color = "#450c54") +
+  geom_smooth(se = FALSE, color = "#2eb27b") +
+  labs(x = "Year", y = "Score Differential", caption = 'Each point represents the score differential of a game') +
+  ggtitle("Score Differentials from 1985 to 2016", subtitle = 'Are score differentials increasing or decreasing?') + 
+  theme_minimal() +
+  scale_fill_viridis(option = 'D')
+```
+
+```{r, echo=FALSE, message = FALSE, fig.alt = 'Faceted histogram displaying the distribution of the score differentials of every game from 1985-2016 grouped by year, with the vertical line representing the overall mean score differential.'}
+MarchMadness %>%
+  ggplot(aes(x = ScoreDifferential, fill = Year)) + 
+  geom_histogram() +
+  facet_wrap(~ Year, ncol = 8, nrow = 4) +
+  scale_fill_viridis(option = 'D') +
+  theme_minimal() +
+  labs(x = "Distribution of Score Differentials", y = "Number of Score Differentials", title = 'Distribution of score differentials by year from 1985-2016', subtitle = 'Has the distribution of score differentials from 1985-2016 become more right skewed over time?') +
+  guides(fill = "none") + geom_vline(xintercept = 11.6941) + 
+  xlim(0,40)
+```
+
+Another method for assessing the competitiveness of March Madness over time is looking at the distributions of all the score differentials in each year. If the distributions appear to be clustering on the left side of the graph, indicating closer games, then it can be concluded that March Madness is becoming more competitive over time.
+
+This faceted histogram displays the distribution of the score differentials of all games played in each Men’s March Madness tournament from 1985-2016. This graph is seeking to analyze the shape, center, and spread of these histograms over a long period of time to determine if March Madness games are becoming closer.
+
+The main takeaway from this graph is that there is little to no observable variation in the shape, center, and spread of the distributions of score differentials over time. For the majority of the years from 1985-2016, the distributions appear multimodal and mostly symmetrical around the overall mean score differential. Most years appear to have a few outliers to the right of the distribution as well. Moreover, there appears to be a steady slight decrease in the number of blowout games with score differentials greater than 20 over time, which would indicate that the games are becoming more competitive as time goes on. While March Madness games may have become more competitive over the course of a few years, in the interest of our investigation, there has been little variation in how competitive March Madness has been from 1985-2016. 
+
+
+## Number of wins by double digits seeds by year
+
+```{r, echo=FALSE, fig.alt = 'Bar graph displaying the total number of wins by teams seeded 10-16 in the tournament in every year from 1985-2016, with a trend line representing the trend over time.'}
+MarchMadness <- MarchMadness %>%
+  mutate(DoubleDigitSeed = WinningSeed >= 10)
+
+DoubleDigitSeeds <- MarchMadness %>%
+  filter(Round != 'Opening Round') %>%
+  filter(DoubleDigitSeed == 'TRUE')
+
+DoubleDigitSeeds2 <-DoubleDigitSeeds %>%
+  group_by(Year) %>%
+  count()
+
+DoubleDigitSeeds2 %>%
+  ggplot(aes(x = Year, fill = Year, y = n)) +
+  geom_col() + 
+  scale_fill_viridis() +
+  theme_classic() + 
+  labs(y = 'Number of Wins by Double Digit Seeds', title = 'Number of wins by double digit seeds by year', subtitle = 'Have double digit seeds won more games from 1985 to 2016?') +
+  geom_line() +
+  guides(fill = "none")
+```
+
+Another way to determine if March Madness is becoming more competitive over time is analyzing the amount of games double digit seeds won each year. If the number of games won by double digit seeds increased, then one could conclude that March Madness is becoming more competitive over time, because the “worst” teams in the tournament are experiencing more success in upsetting the “best” teams. This bar graph displays the total number of games won by teams seeded between 10-16 (double digit seeds) in each March Madness tournament from 1985-2016.
+
+The main takeaway from this graph is that lower seeded teams have won more games in the latter years than they did in the former. This suggests that the gap between higher seeded teams and lower seeded teams has narrowed considerably over time, and that double digit seeds’ chance of winning games has increased over time. Therefore, this metric suggests that March Madness has become more competitive over time, as double digit seeds are producing more upsets of top-seeded teams.
+
+## Win Percentage by Seed
+
+We can also measure whether higher seeds win more often by comparing the win percentage of each seed in all tournament games for the first and second 16 years of our data.
+
+```{r, echo=FALSE, message = FALSE, fig.alt = 'Side by side bar graph displaying the win percentage of each seed in all games played from 1985-2000 (represented by the purple bars) and from 2001-2016 (represented by the green bars)'}
+earlywins <- MarchMadness %>% 
+  mutate(era = Year > 2000) %>% 
+  filter(Round != "Opening Round") %>%
+  group_by(WinningSeed, era) %>% 
+  count()
+
+earlywins[is.na(earlywins)] = 0
+
+early <- MarchMadness %>%
+  mutate(era = Year > 2000) %>% 
+  filter(Round != "Opening Round") %>%
+  group_by(LosingSeed, era) %>% 
+  count() %>% 
+  full_join(earlywins, join_by("LosingSeed" == "WinningSeed")) %>% 
+  mutate(`Win Percentage` = n.y/(n.y + n.x)) %>% 
+  filter(era.x == era.y)
+  
+early$era.x[early$era.x == "FALSE"] <- "1985-2000"
+early$era.x[early$era.x == "TRUE"] <- "2001-2016"
+names(early)[names(early) == 'LosingSeed'] <- 'Seed'
+early[is.na(early)] = 0
+
+early %>% 
+  ggplot(aes(x = Seed, y = `Win Percentage`, fill = era.x)) + geom_col(position = "dodge") + labs(title = "Has Seed Win Percentage Changed Over Time?") + scale_fill_manual("Era", values = c("1985-2000" = "#450c54", "2001-2016" = "#2eb27b")) + theme_minimal()
+
+```
+
+Although this graph seems relatively constant, there are some striking numbers here. The win percentage of 6-seeds was about 10% lower in the second half of our data. Much of this is clearly because of their first-round opponents, 11-seeds, whose win percentage jumped about 8%. Most of the remainder can be explained by the fact that 6-seed Kansas won the entire thing in 1988, which inflates the early data. The other noticeable decline is 14-seeds, also about 8%, and accompanied by about a 4% jump in 3-seed win percentage. This corresponds to thirteen 14 seed - 3 seed upsets in the early data, with a total of fifteen 14-seed wins, compared to just eight after 2000. But perhaps the most remarkable trend is how constant (and dominant) the win percentage of the top seeds has been. The top 4 seeds had barely any change in win percentage, with 1-seeds consistently winning an impressive 80% of their games. Overall, the trend from this graph seems to be that 5-seeds through 12-seeds have gotten closer, which leads to a more competitive tournament in the early rounds, but the top 3 seeds are still the ones cutting down the nets. Sure enough, 1, 2 and 3-seeds have won all but five of the 38 championships since 1985 (including 2017-2023). So March Madness may have become more mad in the early rounds, but at the end of the day it’s still the favorites that come out on top.
+
+
+## Conclusion
+
+Overall, it seems that whether March Madness has become more competitive really depends on how you define competitive. On the one hand, we have pretty clearly shown that game scores have not had any meaningful trend towards closer games, which would imply a more competitive and exciting tournament. On the other hand, if you measure by upsets, it seems like there may have been a moderate increase in how often double-digit seeds win, which is probably a good thing because everyone loves a “Cinderella” team. While there have been some significant fluctuations on a year to year scale, over the course of 30 years, whether or not March Madness has become more competitive is largely inconclusive. In the end, it makes sense that it’s hard to draw firm conclusions about the tournament: all that we can say for certain is that March will stay mad.
+
+# Appendix 
+
+```{r}
+# Read in the dataset
+MarchMadness <- read_csv('marchmadness.csv') 
+
+# Renaming Variables
+MarchMadness <- MarchMadness %>%
+  rename(LosingSeed = "Losing Seed") %>%
+  rename(WinningSeed = "Winning Seed") %>%
+  rename(LosingScore = "Losing Score") %>%
+  rename(WinningScore = "Winning Score")
+
+# Creating new variable score differential
+MarchMadness <- MarchMadness %>%
+  mutate(ScoreDifferential = WinningScore - LosingScore)
+
+
+# Creating a different date variable
+MarchMadness <- MarchMadness %>%
+  mutate(YMDDate = as.Date(Date, "%m/%d/%y")) %>%
+  mutate(Year = year(YMDDate))
+
+# Create a new data table by pivoting the original `MarchMadness` dataset to have the date of the game and the score associated with winning and losing.
+MarchMadnessPivot <- MarchMadness %>%
+  select(YMDDate, Year, LosingScore, WinningScore) %>%
+  pivot_longer(cols = c(3:4), names_to = "WinorLoss", values_to = "Score")
+```
+
+## Difference in scores by year
+
+```{r, fig.alt = 'Scatterplot displaying the scores of the winning and losing teams in every year from 1985-2016, with a trend line representing the trends in winning and losing score over time.'}
+
+# Creating scatterplot of the scores from 1985 to 2016
+ggplot(MarchMadnessPivot, aes(x = YMDDate, y = Score, color = fct_rev(factor(WinorLoss)))) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(se = FALSE) +
+  scale_color_manual(values = c("#2eb27b", "#450c54"),   name = "Type of Score", labels=c('Winning Score', 'Losing Score'))+
+  labs(x = "Year", caption = 'Each game has two points, winning score and losing score') +
+  ggtitle("Men's March Madness Scores from 1985 to 2016", subtitle = 'Have scores increased or decreased?') + 
+  theme_minimal()
+```
+
+## Score differentials by year
+
+```{r, fig.alt = 'Scatterplot displaying the score differential of every game played from 1985 to 2016, with a trend line representing the trend of the score differentials over time.'}
+
+# Creating scatterplot of the score differentials from 1985 to 2016
+ggplot(MarchMadness, aes(x = YMDDate, y = ScoreDifferential)) +
+  geom_point(alpha = 0.5, color = "#450c54") +
+  geom_smooth(se = FALSE, color = "#2eb27b") +
+  labs(x = "Year", y = "Score Differential", caption = 'Each point represents the score differential of a game') +
+  ggtitle("Score Differentials from 1985 to 2016", subtitle = 'Are score differentials increasing or decreasing?') + 
+  theme_minimal() +
+  scale_fill_viridis(option = 'D')
+```
+
+```{r, fig.alt = 'Faceted histogram displaying the distribution of the score differentials of every game from 1985-2016 grouped by year, with the vertical line representing the overall mean score differential.'}
+# Creating faceted histogram with score differential on the x axis, faceted by year
+MarchMadness %>%
+  ggplot(aes(x = ScoreDifferential, fill = Year)) + 
+  geom_histogram() +
+  facet_wrap(~ Year, ncol = 8, nrow = 4) +
+  scale_fill_viridis(option = 'D') +
+  theme_minimal() +
+  labs(x = "Distribution of Score Differentials", y = "Number of Score Differentials", title = 'Distribution of score differentials by year from 1985-2016', subtitle = 'Has the distribution of score differentials from 1985-2016 become more right skewed over time?') +
+  guides(fill = "none") + geom_vline(xintercept = 11.6941) + 
+  xlim(0,40)
+```
+
+## Number of wins by double digits seeds by year
+
+```{r, fig.alt = 'Bar graph displaying the total number of wins by teams seeded 10-16 in the tournament in every year from 1985-2016, with a trend line representing the trend over time.'}
+# Creating double digit seed indicator variable and adding it to dataset
+MarchMadness <- MarchMadness %>%
+  mutate(DoubleDigitSeed = WinningSeed >= 10)
+# Filtering out the First Four games and any non double digit seeds
+DoubleDigitSeeds <- MarchMadness %>%
+  filter(Round != 'Opening Round') %>%
+  filter(DoubleDigitSeed == 'TRUE')
+# Grouping by year and counting the number of wins by double digit seeds in each year
+DoubleDigitSeeds2 <-DoubleDigitSeeds %>%
+  group_by(Year) %>%
+  count()
+# Creating bar plot with year on the x axis and the number of wins by double digit seeds on the y axis
+DoubleDigitSeeds2 %>%
+  ggplot(aes(x = Year, fill = Year, y = n)) +
+  geom_col() + 
+  scale_fill_viridis() +
+  theme_classic() + 
+  labs(y = 'Number of Wins by Double Digit Seeds', title = 'Number of wins by double digit seeds by year', subtitle = 'Have double digit seeds won more games from 1985 to 2016?') +
+  geom_line() +
+  guides(fill = "none")
+```
+
+## Win Percentage by Seed
+
+```{r, multiple = "all", fig.alt = 'Side by side bar graph displaying the win percentage of each seed in all games played from 1985-2000 (represented by the purple bars) and from 2001-2016 (represented by the green bars)'}
+# Create a dataset that has wins by seed by era (20th or 21st century)
+earlywins <- MarchMadness %>% 
+  mutate(era = Year > 2000) %>% 
+  filter(Round != "Opening Round") %>%
+  group_by(WinningSeed, era) %>% 
+  count()
+
+# Replace NA values
+earlywins[is.na(earlywins)] = 0
+
+# Create another dataset with losses and join it with the wins dataset to do a win percentage calculation
+early <- MarchMadness %>%
+  mutate(era = Year > 2000) %>% 
+  filter(Round != "Opening Round") %>%
+  group_by(LosingSeed, era) %>% 
+  count() %>% 
+  full_join(earlywins, join_by("LosingSeed" == "WinningSeed")) %>% 
+  mutate(`Win Percentage` = n.y/(n.y + n.x)) %>% 
+  filter(era.x == era.y)
+
+# Rename columns for clarity  
+early$era.x[early$era.x == "FALSE"] <- "1985-2000"
+early$era.x[early$era.x == "TRUE"] <- "2001-2016"
+names(early)[names(early) == 'LosingSeed'] <- 'Seed'
+early[is.na(early)] = 0
+
+# Create the graph
+early %>% 
+  ggplot(aes(x = Seed, y = `Win Percentage`, fill = era.x)) + geom_col(position = "dodge") + labs(title = "Has Seed Win Percentage Changed Over Time?") + scale_fill_manual("Era", values = c("1985-2000" = "#450c54", "2001-2016" = "#2eb27b")) + theme_minimal()
+
+```

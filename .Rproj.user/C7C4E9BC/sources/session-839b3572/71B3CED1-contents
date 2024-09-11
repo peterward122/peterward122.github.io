@@ -1,0 +1,185 @@
+---
+title: "DataSciProj"
+author: "Peter Ward"
+date: "2023-04-13"
+output: html_document
+---
+
+# Library Imports
+
+```{r setup, message =FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(lubridate)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(viridis)
+
+```
+
+We found and acquired this dataset on dataworld.com under the following URL: https://data.world/sports/ncaa-mens-march-madness.
+
+# Data Cleaning
+
+```{r, message = FALSE}
+marchmadness <- read_csv('marchmadness.csv')
+
+marchmadness <- marchmadness %>%
+  mutate(scoreDiff = `Winning Score` - `Losing Score`) %>%
+  mutate(Upset = ifelse(`Losing Seed` < `Winning Seed`, 1, 0)) %>%
+  mutate(UpsetNum = ifelse(`Losing Seed` < `Winning Seed`, 1, 0)) %>%
+  mutate(SeedDiff = abs(`Winning Seed` - `Losing Seed`)) %>%
+  mutate(Blowout = ifelse(scoreDiff > 10, 1, 0)) %>%
+  mutate(BlowoutNum = ifelse(scoreDiff > 10, 1, 0))
+
+marchmadness <- marchmadness %>%
+  mutate(Upset = as.factor(Upset)) %>%
+  mutate(Blowout = as.factor(Blowout)) %>%
+  mutate(SeedDiff = as.factor(SeedDiff))
+
+marchmadness <- marchmadness %>%
+  mutate(DATE = as.Date(Date, "%m/%d/%y")) %>%
+  mutate(year = year(DATE))
+
+head(marchmadness)
+
+```
+## One Number Story Calculations
+
+```{r}
+marchmadness %>%
+  group_by(Upset) %>%
+  summarize(mean(scoreDiff))
+
+marchmadness %>%
+  summarize(mean(scoreDiff))
+
+marchmadness %>%
+  group_by(Upset) %>%
+  count()
+
+```
+# Research Question
+
+> Have March Madness tournament games gotten more competitive over time?
+
+
+
+## Data Visualizations 
+
+```{r}
+marchmadness %>%
+  ggplot(aes(x = scoreDiff)) +
+  geom_histogram(fill = 'orangered')
+```
+```{r}
+marchmadness %>%
+  ggplot(aes(x = scoreDiff, fill = year)) + 
+  geom_histogram() +
+  facet_wrap(~ year, ncol = 8, nrow = 4) +
+  scale_fill_viridis(option = 'D') +
+  theme_classic() +
+  labs(x = "Distribution of Score Differentials")
+
+```
+
+```{r}
+yearDiff <- marchmadness %>%
+  group_by(year) %>%
+  summarize(mean(scoreDiff))
+
+yearDiff %>%
+  ggplot(aes(x = year, y = `mean(scoreDiff)`, fill = year)) +
+  geom_col() +
+  labs(x = 'Year', y = 'Average Score Differential of All Games Played', title = 'Have March Madness Games Become More Competitive Over Time?') + 
+  geom_line() +
+  theme_classic() + 
+  scale_fill_viridis(option = 'D')
+```
+
+```{r}
+yearBlowouts <- marchmadness %>%
+  group_by(year) %>%
+  summarize(numBlowouts = sum(BlowoutNum))
+
+yearBlowouts %>%
+  ggplot(aes(x = year, y = numBlowouts, fill = year)) +
+  geom_col() +
+  labs(x = 'Year', y = 'Total Number of Blowouts (score differential > 10)') +
+  theme_classic() +
+  scale_fill_viridis() +
+  geom_line()
+
+```
+```{r}
+yearUpsets <- marchmadness %>%
+  group_by(year) %>%
+  summarize(numUpsets = sum(UpsetNum))
+
+yearUpsets %>%
+  ggplot(aes(x = year, y = numUpsets, fill = year)) +
+  geom_col() +
+  labs(x = 'Year', y = 'Total Number of Upsets') + 
+  theme_classic() +
+  scale_fill_viridis() +
+  geom_line()
+```
+```{r}
+WScore <- marchmadness %>%
+  group_by(year) %>%
+  summarize(meanW = mean(`Winning Score`))
+
+LScore <- marchmadness %>%
+  group_by(year) %>%
+  summarize(meanL = mean(`Losing Score`))
+
+BothScore <- WScore %>%
+  left_join(LScore, by = c("year" = "year"))
+
+BothScore %>%
+  ggplot() +
+  geom_line(aes(x = year, y = meanW, color = 'red')) +
+  geom_line(aes(x = year, y = meanL, color = 'blue')) + 
+  labs(subtitle = 'WinningScore = blue, LosingScore = Red', y = 'Points Scored')
+
+```
+```{r}
+marchmadness <- marchmadness %>%
+  mutate(final = str_detect(Round, "National Championship"))
+
+championships <- marchmadness %>%
+  filter(final == 'TRUE')
+
+championships %>%
+  ggplot(aes(x = year, y = `Winning Seed`, fill = year)) +
+  geom_col() +
+  scale_fill_viridis(option = 'D') +
+  theme_classic() +
+  labs(y = 'Seed of Winning Team') +
+  geom_line()
+```
+
+```{r}
+marchmadness <- marchmadness %>%
+  mutate(doubleDigit = `Winning Seed` >= 10)
+
+doubleDigit <- marchmadness %>%
+  filter(doubleDigit == 'TRUE')
+
+doubleDigit2 <- doubleDigit %>%
+  group_by(year) %>%
+  count()
+
+doubleDigit2 %>%
+  ggplot(aes(x = year, fill = year, y = n)) +
+  geom_col() + 
+  scale_fill_viridis() +
+  theme_classic() + 
+  labs(y = 'Number of Wins by Double Digit Seeds') +
+  geom_line()
+```
+
+
+

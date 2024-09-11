@@ -1,0 +1,4 @@
+"0","# Note that we can make the same plot by specifying the argument names explicitly:"
+"0","ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +"
+"0","    geom_point() +"
+"0","    theme_classic()"

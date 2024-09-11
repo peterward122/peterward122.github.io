@@ -1,0 +1,205 @@
+---
+title: "Group Project 1"
+authors: "Peter Ward, Hayes Waddell, Jovian Pham, Andrew Snider"
+date: "2023-10-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Load in the datasets and library statements
+```{r, message = FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+airbnb <- read_csv('https://ajohns24.github.io/data/NYC_airbnb_kaggle.csv')
+neighborhoods <- read_csv('https://ajohns24.github.io/data/NYC_nbhd_kaggle.csv')
+```
+# Data Context
+
+The dataset we are analyzing contains information regarding the price of AirBnB listings in New York City. It has data on roughly 45,000 listings, originally downloaded from kaggle. These listings span 217 neighborhoods, where each neighborhood falls into 1 of 5 boroughs (eg: Brooklyn, Queens). We took a random sample of 5,000 listings from this dataset, only using listings with prices between $0 and $1000. Along with the price of each listing, the dataset contains information about each listing, including how many bathrooms it has, how many people it accommodates, etc. as well as information about the person listing the AirBnB, such as their average review rating, cancellation policy, etc.
+
+# Filter out any price points that aren't between $0 and $1000
+```{r, message = FALSE}
+set.seed(253)
+airbnb_sub <- airbnb %>%
+  filter(price %in%(0:1000)) %>%
+  sample_n(size = 5000)
+```
+
+# Join our two datasets
+```{r, message = FALSE}
+airbnb_subneighbor <- airbnb_sub %>%
+  left_join(neighborhoods, by = c("neighbourhood_cleansed" = "neighbourhood"))
+```
+
+# Remove any irrelevant predictors by intutition
+```{r, message = FALSE}
+airbnb_subneighbor <- airbnb_subneighbor %>%
+  select(host_is_superhost, host_has_profile_pic, neighbourhood_cleansed,latitude, longitude, property_type,room_type, accommodates, bathrooms,bedrooms,beds, bed_type,price, guests_included, minimum_nights, maximum_nights, availability_30, number_of_reviews, review_scores_rating, cancellation_policy, neighbourhood_group)
+```
+
+To simplify our model, we first used intuition to eliminate several variables that would not help determine a listing’s price. Among these were variables that had a correlation but no causation, as well as variables that contained redundant information.
+
+
+After removing some variables with intuition, we ran a LASSO model to further simplify our final model. This further eliminated variables and left us with these 10 final variables, which we thought would have a significant impact on the model: longitude, accommodates, bathrooms, bedrooms, availability_30, number_of_reviews, neighbourhood_cleansed, property_type, room_type, and neighbourhood_group. 
+
+It should be noted that we also chose to impute missing data before creating our models. The purpose of this is to allow RStudio to run the dataset without any errors, as there were many listings that were missing data for one or more variables. Some functions fail when confronted with missing data.
+
+# LASSO Model Specification and Creation
+```{r, message = FALSE}
+library(tidymodels)
+
+lasso_spef <- linear_reg() %>% 
+  set_mode("regression") %>% 
+  set_engine("glmnet") %>% 
+  set_args(mixture = 1, penalty = tune())
+
+
+variable_recipe1 <- recipe(price ~ ., data = airbnb_subneighbor) %>% 
+  step_string2factor(all_nominal_predictors()) %>%
+  step_impute_knn(all_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>% 
+  step_normalize(all_numeric_predictors())
+
+lasso_workflow1 <- workflow() %>% 
+  add_recipe(variable_recipe1) %>% 
+  add_model(lasso_spef)
+
+set.seed(253)
+lasso_models <- lasso_workflow1 %>% 
+  tune_grid(
+    grid = grid_regular(penalty(range = c(-5, 0.6)), levels = 75),
+    resamples = vfold_cv(airbnb_subneighbor, v = 10),
+    metrics = metric_set(mae)
+  )
+```
+
+# Select our best LASSO model and finalize
+```{r, message = FALSE}
+best_penalty1 <- lasso_models %>% 
+  select_best(metric = "mae")
+best_penalty1
+
+parsimonious_penalty1 <- lasso_models %>% 
+  select_by_one_std_err(metric = "mae", desc(penalty))
+parsimonious_penalty1
+
+final_lasso <- lasso_workflow1 %>% 
+  finalize_workflow(parameters = parsimonious_penalty1) %>% 
+  fit(data = airbnb_subneighbor)
+
+tidy(final_lasso) %>%
+  filter(estimate != 0)
+```
+
+# KNN Model Specification and Creation
+```{r, message = FALSE}
+# Specify KNN workflow and recipe
+knn_spec <- nearest_neighbor() %>%
+  set_mode("regression") %>% 
+  set_engine(engine = "kknn") %>% 
+  set_args(neighbors = tune())
+
+variable_recipe <- recipe(price ~ longitude + accommodates + bathrooms + bedrooms + availability_30 + number_of_reviews + neighbourhood_cleansed + property_type + room_type + neighbourhood_group, data = airbnb_subneighbor) %>% 
+  step_string2factor(all_nominal_predictors()) %>%
+  step_impute_knn(all_predictors()) %>%
+  step_nzv(all_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_normalize(all_numeric_predictors())
+
+knn_workflow <- workflow() %>% 
+  add_recipe(variable_recipe) %>% 
+  add_model(knn_spec)
+
+
+```
+# Create 25 different KNN models
+```{r, message = FALSE}
+set.seed(253)
+knn_models <- knn_workflow %>% 
+  tune_grid(
+    grid = grid_regular(neighbors(range = c(1, 50)), levels = 25),
+    resamples = vfold_cv(airbnb_subneighbor, v = 10),
+    metrics = metric_set(mae, rsq)
+  )
+```
+
+# Select best KNN model and finalize it
+```{r, message = FALSE}
+best_k <- knn_models %>%
+  select_best()
+best_k
+
+knn_models %>%
+  collect_metrics() %>% 
+  filter(neighbors == 17)
+
+final_knn <- knn_workflow %>%
+  finalize_workflow(parameters = best_k) %>% 
+  fit(data = airbnb_subneighbor)
+```
+
+We first utilized a LASSO model to narrow down the list of variables to the ones with the most predictive power, as LASSO penalizes superfluous variables. Then, using the remaining 10 variables from our LASSO model as predictors, we created a KNN algorithm, as many of the variables had complex relationships with the price that likely should not be modeled with parametric models. We created 25 different KNN models with the “k” tuning parameter ranging from 1 to 50, and then chose the model that had the lowest overall k-fold cross validated MAE as our final model, which ended up being the model with a k value of 17.
+
+
+# Model Evaluation: 
+
+## How accurately can we predict a listing’s price by its features?
+Our final KNN model with k = 17  had an MAE of 44.96, meaning that its predictions for the price of an AirBnB listing in NYC were off by 44.96 dollars on average. Therefore, we expect that we can predict a listing’s price within 44.96 dollars of its actual price by its features.
+
+The model had an R-squared of .51, meaning that approximately 51% of the variance in price results from variance in our predictors. This is relatively low.
+
+The residual plot is balanced over 0, meaning the model is not skewed one way or the other. It also appears that our model makes more accurate predictions when it predicts lower prices, and gets less accurate as its predictions for price increase.
+
+With the information available to us about the data, we found no reason to believe that this model is not fair or biased in any way.  
+## What makes some listings more expensive than others?!
+
+Using the output of our final LASSO model, it is evident that a listing’s neighborhood has an impact on its price, as some of the neighbourhood_cleansed predictors have negative coefficient values, while others have positive coefficient values, meaning that being in some neighborhoods causes the price of a listing to be higher, while other neighborhoods have the opposite effect. We can also tell that listings that accommodated more people, had more bathrooms and bedrooms, and were more available in the next month were listed at higher prices, because the values of these coefficients were all positive. However, some predictors negatively affect price, as the values of the longitude and number of reviews coefficients are negative, meaning that as the longitude or number of reviews of a listing increases, the price of that listing decreases. It appears that being in specific neighborhoods, as well as accommodating more people and having more bedrooms and bathrooms are all factors that make some listings more expensive than others. Therefore, some of our final remaining predictors cause prices of a listing to be higher, while others cause listing prices to decrease, but they all have some impact on price.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Appendix
+
+```{r}
+autoplot(lasso_models) +
+  scale_x_continuous() +
+  xlab(expression(lambda))
+```
+
+```{r}
+autoplot(knn_models)
+```
+
+We used these plots to make sure the range we chose for our tuning parameters was reasonable.
+
+```{r}
+final_knn %>% 
+  augment(new_data = airbnb_subneighbor) %>% 
+  mutate(.resid = price - .pred) %>% 
+  ggplot(aes(x = .pred, y = .resid)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0)
+```
+
+We used this residual plot to analyze if our final KNN model was correct or not.
+

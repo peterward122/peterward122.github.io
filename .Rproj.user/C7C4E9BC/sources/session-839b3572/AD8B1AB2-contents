@@ -1,0 +1,149 @@
+---
+title: "Advanced visualization with ggplot2"
+subtitle: "Challenge 1"
+author: "YOUR NAME"
+format: 
+  html:
+    embed-resources: true
+---
+
+# Instructions
+
+**Task:** Using `ggplot2` and other tools in R, recreate the original New York Times graphic to the greatest extent possible. Try to get as close as possible to the figure below:
+
+![](https://bheggeseth.github.io/212_fall_2024/images/hw1_goal.png){width=600, fig-align="center"}
+
+You will need to use reference pages and documentation to discover necessary tools. For example, you may want to Google search "ggplot multiple plots". When looking through results, check publication dates and use newer references.
+
+**Requirements for passing:**
+
+- Temperature graph
+    - Bands for the record, normal, and actual highs and lows are shown in the correct colors.
+    - Downward triangles point to the record high temperatures above the red band.
+    - Text displays the record high temperatures above the triangles.
+    - X-axis label: 3-letter month abbreviations appear in the middle of each month.
+    - Y-axis label: Tick marks at 0, 40, 80, and 120 only.
+    - Vertical lines separate the months.
+    - Title of "Temperature" is included.
+- Precipitation
+    - Tan area and blue line reflecting the monthly cumulative precipitation is included.
+    - Text (number) for cumulative precipitation for each month is included at the end of each month just above the blue line.
+    - Downward triangles point to the record precipitation days.
+    - Vertical lines separate the months.
+    - Title of "Precipitation" is included.
+- Overall
+    - Both the temperature and precipitation graphs are in one figure.
+    - The temperature plot takes up more vertical space than the precipitation plot.
+    - The title "SFO weather in 2011" is present.
+
+**Extra:** If you'd like further practice, recreate the legend in the temperature graph that shows how the colored lines relate to record, normal, and actual highs.
+
+**Submission:** Click the "Render" button in RStudio to knit a self-contained HTML with all images embedded. Commit and push changes to this file as well as the generated HTML. Push your changes to GitHub by midnight on the deadline. (GitHub classroom automatically creates a pull request for receiving feedback.)
+
+# AI usage
+
+If you use Github Co-pilot, include the prompts in comments within the R Chunks and indicate the use of Copilot but including `(Copilot)` at the end of the comment.
+
+If you use another AI tool (e.g., ChatGPT, Google Bard) to help with this assignment, please paste below the prompts you use and their associated output.
+
+**Prompt:** How to combine two plots into one figure
+
+**Output:** grid.arrange() code I used
+
+
+# Setup
+
+```{r}
+# Code for loading packages and reading in data
+
+library(tidyverse)
+weather <- read_csv("https://mac-stat.github.io/data/sfo_weather.csv")
+
+weather2 <- weather %>%
+  group_by(Month) %>%
+  filter(Day == max(Day)) %>%
+  filter(Month != 12)
+
+weather3 <- weather %>%
+  filter(Record == "TRUE")
+
+weather4 <- weather %>%
+  group_by(Month) %>%
+  mutate(mon = month(date, label = TRUE, abbr = FALSE))
+```
+
+
+
+# Visualization
+
+```{r}
+# Code for recreating the visualization
+# Use as many code chunks as you need to organize your work well
+
+plot_1 <- ggplot(weather) +
+    geom_linerange(aes(x = dateInYear, ymin = RecordLow, ymax = RecordHigh), color = '#ecebe3', linewidth = 1) +
+    geom_linerange(aes(x = dateInYear, ymin = NormalLow, ymax = NormalHigh), color = '#C8B8BA', linewidth = 1) +
+    geom_linerange(aes(x = dateInYear, ymin = Low, ymax = High), color = '#A90248', linewidth = 1) +
+    geom_vline(data = weather2, aes(xintercept = dateInYear), linetype = 2, alpha = 0.3) +
+    geom_point(data = weather3, aes(x = dateInYear, y = RecordHigh + 1), shape = 25, fill = 'black') +
+    geom_text(data = weather3, aes(x = dateInYear, y = RecordHigh + 10, label = 'Record High:'), size = 2) +
+    geom_text(data = weather3, aes(x = dateInYear, y = RecordHigh + 7, label = RecordHigh), size = 2) +
+    scale_x_continuous(breaks = c(16,45,75,105,135,166,196,226,258,289,319,350),labels = month.abb) +
+    scale_y_continuous(breaks = seq(from = 0, to = 120, by = 40), limits = c(0,120)) +
+    labs(x = NULL, y = NULL, title = "SFO Weather in 2011", subtitle = "Temperature") +
+    theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(axis.line.x = element_blank()) +
+    theme(axis.ticks.x = element_blank()) +
+    coord_cartesian(expand = FALSE)
+
+plot_1
+
+ggsave("tempplot.png", plot = plot_1, width = 10, height = 10)
+```
+```{r}
+weather5 <- weather %>%
+  group_by(Month)
+  
+weather6 <- weather %>%
+  filter(RecordP == "TRUE")
+
+weather7 <- weather %>%
+  group_by(Month) %>%
+  mutate(maxCulmPrec = max(CulmPrec)) %>%
+  filter(dateInYear == max(dateInYear))
+```
+
+
+
+
+```{r}
+plot_2 <- ggplot(weather) +
+  geom_line(data = weather5, aes(x = dateInYear, y = CulmPrec), color = 'skyblue', size = 1) +
+  geom_area(data = weather5, aes(x = dateInYear, y = CulmPrec),fill = '#ebeae2') +
+  scale_y_continuous(breaks = seq(from = 0, to = 8, by = 4), limits = c(0,8)) +
+  geom_vline(data = weather2, aes(xintercept = dateInYear), alpha = 0.075) +
+  geom_point(data = weather6, aes(x = dateInYear, y = CulmPrec), shape = 25, fill = 'black') +
+  geom_text(data = weather7, aes(x = dateInYear, y = maxCulmPrec + 0.005, label = CulmPrec), size = 2, vjust = -0.5) +
+  labs(x = NULL, y = NULL, subtitle = "Precipitation") +
+  theme_classic() +
+  theme(axis.line.x = element_blank()) +
+  theme(axis.ticks.x = element_blank()) +
+  theme(axis.text.x = element_blank())
+
+
+plot_2
+
+ggsave("precipplot.png", plot = plot_2, width = 10, height = 5)
+```
+```{r}
+library(gridExtra)
+
+plot_3 <- grid.arrange(plot_1, plot_2, nrow = 2, heights = c(2,1))
+
+plot_3
+
+ggsave("finalplot.png", plot = plot_3, width = 10, height = 10)
+```
+
+

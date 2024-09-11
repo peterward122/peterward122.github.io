@@ -1,0 +1,248 @@
+---
+title: "Stat 155 Final Project Writeup"
+author: "Izzy Flood, Peter Ward, Neel Thakurdas"
+date: "2023-03-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggmosaic)
+library(broom)
+library(tidyverse)
+library(tidyr)
+```
+
+# Data Description:
+
+Our data is a sample of 7 years taken from the Major League Baseball (MLB) Statcast database. The data includes all pitchers who faced 150 or more batters from the year 2015 to 2022. These years were chosen because Statcast data and its associated metrics were first introduced in 2015, thus this is the first year that Statcast data was available. If a pitcher faced more than 150 batters in multiple years, than multiple cases for each season are included. The dataset consists of a number of statistics recorded for each pitcher, such as season earned run average (ERA), the average exit velocity that the pitcher gave up in a given season, and their whiff percentages. In total, there are 3151 units of observation in this dataset. Statcast data is collected for the purpose of measuring pitchers' and batters' performance using more advanced metrics that seek to eliminate as many variables as possible from the equation and delve deeper than the surface level. This data was collected with advanced technology that tracks every pitch thrown in every MLB ballpark, thus every qualified pitcher and hitter is included in this dataset. We further sampled from this dataset by filtering out every pitcher that throws a four seam fastball, changeup, slider, and curveball, and this filtered dataset is the dataset we used for all of our analysis. In other words, any pitchers from our original dataset that don't throw ALL 4 of the pitch types mentioned above were not included in our analysis.
+
+# Variables of Interest:
+
+ERA - the number of earned runs a pitcher allows per nine innings -- with earned runs being any runs that scored without the aid of an error or a passed ball
+
+Whiff percent - percentage of swings and misses a pitcher induces (# of swings and misses / total # of swings)
+
+Spin rate- the total amount of revolutions the ball undergoes in a minute, measured in rotations per minute. Spin rate has a substantial impact on pitch trajectory.
+
+> Pitch types: 
+
+Slider - hard breaking ball known for its swing and miss potential and sharp horizontal and downward break, as well as tight spin
+Fastball - most common pitch thrown, hardest pitch with most spin and least movement
+Changeup - very similar to fastball except generally 5mph slower and with less spin, usually has downward movement
+Curveball - breaking ball known for its sharp downward break, also good for generating swings and misses
+
+# Filtering out desired pitchers from original dataset
+```{r, message = FALSE}
+statcast <- read_csv('statcast.csv')
+
+statcastALL <- statcast %>%
+  filter(n_sl_formatted != 'NA') %>%
+  filter(n_ff_formatted != 'NA') %>%
+  filter(n_ch_formatted != 'NA') %>%
+  filter(n_cukc_formatted != 'NA')
+
+statcastALL <- statcastALL %>%
+  mutate(ffspin = ff_avg_spin / 100) %>%
+  mutate(slspin = sl_avg_spin / 100) %>%
+  mutate(chspin = ch_avg_spin / 100) %>%
+  mutate(cuspin = cu_avg_spin / 100)
+
+```
+
+# Research Question:
+
+## Does the effect of spin rate on pitchers' whiff rates differ depending on the type of pitch?
+
+Prior to conducting any data analysis/visualization, our expectation is that the spin rate of a pitcher's pitches does impact their whiff rate, and that each pitch type has a varying strength of impact on this relationship. We expect spin to have a greater impact on whiff rate for breaking balls (sliders and curveballs) than fastballs and changeups, because breaking balls are more dependent on spin to generate their sharper break and movement. Moreover, we expect that pitches with greater spin rates will induce greater whiff percentages.
+
+
+# Data Visualizations:
+
+## Average Spin Rates of Each Pitch Type
+```{r, message = FALSE}
+spinpercents <- statcastALL %>%
+  select(ffspin, slspin, chspin, whiff_percent, cuspin)
+
+spinpercents <- spinpercents %>%
+  pivot_longer(cols = c(ffspin, slspin, cuspin, chspin), names_to = "Pitch Type", values_to = "Spin Rates")
+
+spinpercents2 <- spinpercents %>%
+  filter(`Spin Rates` != 'NA') %>%
+  group_by(`Pitch Type`) %>%
+  summarize(meanSpin = mean(`Spin Rates`))
+
+spinpercents2 %>%
+  ggplot(aes(x = `Pitch Type`, y = meanSpin)) +
+  geom_col() +
+  theme_classic() +
+  labs(y = 'Avg Spin Rate in Hundreds', x = 'Pitch Type')
+```
+
+# Distribution of fastball spin rates
+```{r, message = FALSE}
+statcastALL %>%
+  ggplot(aes(x = ffspin)) +
+  geom_histogram() +
+  theme_classic() +
+  labs(x = 'Spin of four seam fastballs in hundreds')
+
+statcastALL %>%
+  summarize(mean(ffspin))
+
+statcastALL %>%
+  summarize(sd(ffspin))
+```
+
+# Distribution of whiff rates
+```{r, message = FALSE}
+statcastALL %>%
+  ggplot(aes(x=whiff_percent)) +
+  geom_histogram() +
+  labs(x = 'Whiff Percent') +
+  theme_classic()
+
+statcastALL %>%
+  summarize(mean(whiff_percent))
+
+statcastALL %>%
+  summarize(sd(whiff_percent))
+```
+
+# Scatterplot between whiff_percent and ERA
+```{r, message = FALSE}
+statcastALL %>%
+  ggplot(aes(x = whiff_percent , y = p_era)) + 
+  geom_point() + 
+  theme_classic() +
+  labs(x = 'Whiff Percent', y = 'ERA')
+
+statcastALL %>%
+  summarize(cor(whiff_percent, p_era))
+```
+
+# Scatterplot between whiff percent and curveball spin rate
+```{r, message = FALSE}
+statcastALL %>%
+  ggplot(aes(x = whiff_percent, y = cuspin)) + 
+  geom_point() + 
+  theme_classic() +
+  labs(x = 'Whiff Percent' , y = 'Avg Spin Rate of Curveballs (in hundreds)')
+
+statcastALL %>%
+  filter(cuspin != 'NA') %>%
+  summarize(cor(whiff_percent, cuspin))
+```
+
+# Scatterplot between whiff percent and fastball spin
+```{r, message = FALSE}
+statcastALL %>%
+  ggplot(aes(x = whiff_percent, y = ffspin)) + 
+  geom_point() + 
+  theme_classic() +
+  labs(y = 'Average Spin Rate of Fastballs (in hundreds)', x = 'Whiff Percent')
+
+statcastALL %>%
+  filter(ffspin != 'NA') %>%
+  summarize(cor(whiff_percent, ffspin))
+```
+
+# Data Visualizations Analysis: 
+
+Our first data visualization is a bar plot that displays the average spin rate for each pitch type we are investigating. This allows us to visualize which pitches have the most and least spin on average. We found that curveballs had the greatest average spin rate, and changeups had the lowest average spin rate. 
+
+Our next data visualization is a histogram that displays the distribution of league whiff percentages over the time interval from 2015-2022. This allows us to visualize what a typical whiff percent looks like, the spread of league whiff percent, as well as what outlier whiff percents look like, which appear to be whiff percents above 45%. This histogram is unimodal and appears to be mostly symmetrical, with a spread of 5% and centered at about 25%.
+
+We constructed a scatterplot displaying whiff percent and ERA. We then calculated the correlation between opponent whiff percentage and pitcher ERA, which had a medium strength correlation of -0.38. The relationship is negative and linear. There are a few outliers in both directions however, meaning some pitchers have low whiff rates but also have low ERAs, and some pitchers have high whiff rates but also have high ERAs. This means that a pitcher's whiff rate is a fairly good indicator of how many runs a pitcher will give up, on average, every 9 innings. On average, the higher a pitchers' whiff rate is, the lower their ERA will be, which explains the negative correlation coefficient.
+
+We then made a scatterplot of whiff percentage and average curveball spin, which showed a moderate correlation of 0.31. This relationship is positive and linear. This shows that a pitcher throwing their curveballs with more spin loosely -+tends to produce more swings and misses. There appear to be a few outliers below the main concentration of points.
+
+We then created a scatterplot between whiff percentage and average fastball spin, which showed a moderate correlation of 0.42. This relationship is positive and linear as well. Unlike the plot showing whiff percentage and average slider spin, there don't appear to be any outliers, but the points are less concentrated together and appear to be more spread out. The correlation between average fastball spin and whiff percent is stronger than the correlation between whiff percent and average curveball spin despite curveballs having higher spin rates on average, which is interesting because it suggests that a pitch having greater spin doesn't guarantee it will produce a higher whiff rate, rather the whiff percent is dependent on the type of pitch as well. It also suggests that pitchers increasing their spin rate is more impactful in generating whiffs for fastballs than breaking balls, which is not what we expected.
+
+After creating all of these visualizations, we were surprised by the relative weakness of the correlations between the spin of each pitch type being thrown and the pitchers' whiff rates. We were also surprised that the correlation between fastball spin and whiff percent was stronger than the correlation between curveball spin and whiff percent, as it contradicts the prediction we made based on our previous baseball knowledge and experience. We suspect that the outliers we noticed in our visualizations are skewing our data and making the correlations appear weaker than they actually are. While these results contradict our initial expectations, we still intend to carry on with the same research question and investigate this relationship further using other methods of statistical analysis and visualization.
+
+# Project Checkpoint 1 Ends Here and Project Checkpoint 2 Begins
+
+# Data Context:
+
+1. Our outcome variable is whiff percentage (whiff_percent), which is a quantitative variable. 
+2. Since we are not dealing with binary outcomes, we will be using a linear regression model.
+3. We will be using multiple predictors of interest, all of which relate to pitch relativity: slider relativity (n_sl_formatted), 4 seam fastball relativity (n_ff_formatted), changeup relativity (n_ch_formatted), and curveball relativity (n_cukc_formatted). These are quantitative variables.
+4. DAG attached on moodle
+5. There are no confounding variables in our model. The horizontal and vertical movement of each pitch will dictate how often a pitcher throws said pitch, which will in turn affect whiff percentage.
+6. There are no precision variables in our model. In our model, we are assuming that horizontal and vertical break of each pitch affects pitch relativity, which in turn affects whiff percentage. 
+7. There are no interaction terms in our model.
+8. Our explanatory variables are pitch the frequencies of 4 different pitches: 4 seam fastball, slider, curveball, and changeup.
+
+> Model Equation:
+
+$$E[\text{WhiffPercent} \mid \text{slAvgSpin, ffAvgSpin, cuAvgSpin, chAvgSpin}= \beta_0 + \beta_1 \text{slspin} + \beta_2 \text{ffspin} + \beta_3 \text{cuspin} + \beta_4 \text{chspin}$$
+
+## Fit Linear Regression Model 
+
+```{r}
+mod2 <- statcastALL %>%
+  with(lm(whiff_percent ~ slspin + ffspin + cuspin + chspin + sl_avg_speed + ff_avg_speed + cu_avg_speed + ch_avg_speed))
+
+```
+
+## Conduct Hypothesis Tests on Model
+```{r}
+tidy(mod2)
+```
+## Construct 95% Confidence Intervals from Model
+```{r}
+confint(mod2)
+```
+
+## Calculate residual standard error of model
+```{r}
+glance(mod2)
+```
+# Residual Plots
+
+```{r, message = FALSE}
+augment(mod2) %>%
+  ggplot(aes(y = .resid, x = .fitted)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) + 
+  geom_hline(yintercept = 0) +
+  labs(x = 'Fitted Whiff Percent Values', y = 'Residuals', title = 'Residuals vs Fitted Whiff Percent Values') +
+  theme_classic()
+```
+# Interpretations:
+
+## Estimate Interpretations:
+
+  > Fastball: For an increase in fastball spin rate by 100 revolutions per minute, the expected increase in whiff rate is approximately 1.24% on average, holding slider, changeup, and curveball spin rates constant.
+  > Changeup: For an increase in changeup spin rate by 100 revolutions per minute, the expected change in whiff rate is approximately -0.088% on average, holding slider, changeup, and curveball spin rates constant.
+
+## Confidence interval interpretation:
+  > Fastball: We are 95% confident that a 100 revolution per minute increase in fastball spin rate is associated with an increase in whiff rate between 1.04% and   1.44%, holding other variables constant. Since 0 is not apart of the interval,
+  we can conclude that there is a relationship between fastball spin rate and whiff rate.
+  > Changeup: We are 95% confident that a 100 revolution per minute increase in changeup spin rate is associated with a change in whiff rate between -0.19% and 0.016%, holding other variables constant. Since 0 is apart of the confidence interval, it is plausible that there is not a relationship between changeup spin rate and whiff rate.
+P value interpretation:
+  For context, we are using a significance threshold of 0.05.
+ 
+## Hypothesis Test Interpretations:
+  > Fastball:
+    Null hypothesis: B2=0. Fastball spin rate has no relationship with whiff        rate, adjusting for other variables.
+    Alternative hypothesis: B2 != 0. Fastball spin rate has a relationship with     whiff rate, adjusting for other variables.
+    Conclusion: The p value is 1.02 x 10^-31, which is smaller than our             significance threshold. Therefore, we have enough evidence to suggest that      there is a relationship between school size and median earnings, so we          reject the null.
+  
+  > Changeup:
+    Null hypothesis: B4=0. Changeup spin rate has no relationship with whiff        rate, adjusting for other variables.
+    Alternative hypothesis: B4 != 0. Changeup spin rate has a relationship with     whiff rate, adjusting for other variables.
+    Conclusion: The p value is approximately 0.097, which is greater than our       significance threshold. Therefore, we don't have sufficient evidence to find     a relationship between changeup spin rate and whiff rate, so we fail to         reject the null.
+
+# Limitations:
+
+One big limitation that we face with this model is the weakness of the relationship between spin rates of specific pitches and the resulting whiff rate of each specific pitch. In our model, we calculate the effect of individual pitch spin rates (fastball, slider, curve, changeup)on a pitcher's net whiff rate. This is helpful, as it can indicate the effectiveness of certain pitch types on a pitchers entire repertoire of pitches. However, if we were able to calculate whiff rates by pitch type, we are confident that we would get even stronger relationships between spin rates of each pitch and the corresponding whiff rates.
+
+We also would've liked to include average velocity of each pitch type in our model and the corresponding effects on whiff rate. Velocity can affect spin rate and whiff rate, making it a confounding variable. Ultimately, we decided not to include velocity because it would create too many variables to interpret and calculate, as well as not being central to our research question. Nonetheless, it could be an interesting factor to look at in the future.

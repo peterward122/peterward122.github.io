@@ -1,0 +1,157 @@
+---
+title: "Untitled"
+author: "Peter Ward"
+date: "2023-11-02"
+output: html_document
+---
+
+## "How can we predict when a ball is going to be a homerun?"
+
+```{r}
+library(shiny)
+library(readr)
+library(tidymodels)
+library(rpart)
+library(rpart.plot)
+```
+
+
+```{r}
+homeruns <- read_csv("https://ajohns24.github.io/data/home_runs.csv")
+
+homeruns2 <- homeruns %>%
+  mutate(isColorado = ifelse(park == 'Coors Field', 0, 1)) %>%
+  filter(bb_type != "ground_ball") %>%
+  filter(bb_type != "popup") %>%
+  filter(launch_speed >= 85) %>%
+  select(bearing, inning, outs_when_up, balls, strikes, plate_x, plate_z, pitch_mph, launch_speed, launch_angle, is_home_run, LF_Dim, CF_Dim, RF_Dim, LF_W, CF_W, RF_W, pitch_name, isColorado) %>%
+  mutate(is_home_run = as.factor(is_home_run)) %>%
+  mutate(isColorado = as.factor(isColorado))
+```
+
+
+```{r}
+set.seed(253)
+homeruns2 <- homeruns2 %>% 
+  mutate(is_home_run = as.factor(is_home_run))
+
+rf_spec <- rand_forest()  %>%
+  set_mode("classification") %>%
+  set_engine(engine = "ranger") %>% 
+  set_args(
+    mtry = NULL,
+    trees = 500,
+    min_n = 2,
+    probability = FALSE, 
+    importance = "impurity"
+  )
+
+forest_model <- rf_spec %>% 
+  step_string2factor(all_nominal_predictors()) %>%
+  step_impute_knn(all_predictors()) %>%
+  fit(is_home_run ~ ., data = homeruns2)
+
+```
+
+```{r}
+forest_model %>%
+  extract_fit_engine() %>%
+  pluck("variable.importance") %>% 
+  sort(decreasing = TRUE)
+
+library(vip)
+forest_model %>% 
+  vip(geom = "point", num_features = 20)
+```
+```{r}
+homeruns %>% select(plate_x,plate_z) %>% summarize(min(plate_x),max(plate_x),min(plate_z),max(plate_z))
+
+```
+
+```{r}
+forest_model
+
+# OOB confusion matrix
+forest_model %>% 
+  extract_fit_engine() %>% 
+  pluck("confusion.matrix") %>% 
+  t()
+
+```
+
+```{r}
+# Create the server function
+server_Homerun <- function(input, output) {
+  output$homerunPrediction <- renderText({
+    # Create a new_data dataframe with input values
+    new_data <- data.frame(
+      launch_speed = input$launch_speed,
+      launch_angle = input$launch_angle,
+      plate_x = input$plate_x,
+      plate_z = input$plate_z,
+      pitch_mph = input$pitch_mph,
+      pitch_name = input$pitch_name,
+      inning = input$inning,
+      bearing = input$bearing,
+      LF_Dim = input$LF_Dim,
+      RF_Dim = input$RF_Dim,
+      CF_Dim = input$CF_Dim,
+      RF_W = input$RF_W,
+      LF_W = input$LF_W,
+      balls = input$balls,
+      CF_W = input$CF_W,
+      outs_when_up = input$outs_when_up,
+      strikes = input$strikes,
+      isColorado = factor(0, levels = c("0", "1"))
+    )
+    
+    # Make a prediction using the loaded model
+    prediction <- predict(forest_model, new_data)
+    
+    if (prediction == "1") {
+      "Prediction: Homerun"
+    } else {
+      "Prediction: Not a Homerun"
+    }
+  })
+}
+
+# Create the user interface
+ui_Homerun <- fluidPage(
+  sidebarLayout(
+    sidebarPanel(
+      h4("Homerun Predictor"),
+      numericInput("launch_speed", "Launch Speed (mph):", min = 50, max = 120, value = 85),
+      numericInput("launch_angle", "Launch Angle (degrees):", min = -90, max = 90, value = 0),
+      sliderInput("plate_x", "Plate_x:", min = -3, max = 3, value = 0),
+      sliderInput("plate_z", "Plate_z:", min = -0.5, max = 5, value = 2.25),
+      numericInput("pitch_mph", "Pitch Speed (mph):", min = 70, max = 105, value = 90),
+      selectInput("pitch_name", "Pitch Type:", choices = unique(homeruns2$pitch_name)),
+      numericInput("inning", "Inning:", min = 1, max = 9, value = 1),
+      selectInput("bearing", "Bearing:", choices = unique(homeruns2$bearing)),
+      sliderInput("LF_Dim", "LF Dim:", min = 310, max = 355, value = 330),
+      sliderInput("RF_Dim", "RF Dim:", min = 302, max = 353, value = 330),
+      sliderInput("CF_Dim", "CF Dim:", min = 390, max = 420, value = 405),
+      sliderInput("RF_W", "RF Wall:", min = 3, max = 25, value = 14),
+      sliderInput("LF_W", "LF Wall:", min = 4, max = 37, value = 20),
+      sliderInput("CF_W", "RF Wall:", min = 6, max = 25, value = 15),
+      numericInput("balls", "Balls:", min = 0, max = 3, value = 1),
+      numericInput("strikes", "Strikes:", min = 0, max = 2, value = 1),
+      numericInput("outs_when_up", "Outs:", min = 0, max = 2, value = 1),
+      submitButton("Predict")
+    ),
+    mainPanel(
+      h4("Homerun Prediction Result"),
+      textOutput("homerunPrediction")
+    )
+  )
+)
+
+# Run the Shiny app
+shinyApp(ui = ui_Homerun, server = server_Homerun)
+
+```
+The goal of this Shiny app is to take a set of values for predictor variables x provided by the user, and use those values to make a prediction to classify that situation as either being a homerun or not a home run.
+
+Instructions: Use the select, slider, or numeric inputs provided to enter desired values for each predictor x. When satisfied with entered values, click Predict button to obtain pop up screen with classification.
+

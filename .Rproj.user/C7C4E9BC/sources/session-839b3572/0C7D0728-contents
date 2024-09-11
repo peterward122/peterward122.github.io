@@ -1,0 +1,219 @@
+---
+title: "Group Project 2"
+author: "Peter Ward, Akshat Koirala, Eddie Chen, Hayes Waddell"
+date: "2023-11-13"
+output: html_document
+---
+
+# Research Question: How accurately can we predict when a ball is going to be a homerun? What key features influence our predictions of home runs?
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data import and cleaning
+```{r}
+library(readr)
+library(tidymodels)
+library(rpart)
+library(rpart.plot)
+library(shiny)
+homeruns <- read_csv("https://ajohns24.github.io/data/home_runs.csv")
+
+homeruns2 <- homeruns %>%
+  mutate(isColorado = ifelse(park == 'Coors Field', 0, 1)) %>% # Created to capture the vast difference in elevation between Coors Field in Colorado and the rest of MLB parks in place of the park variable, which we deemed too complex due to its 32 possible categories
+  filter(bb_type != "ground_ball") %>% # Filtering out ground ball data, since they will never be home runs
+  filter(bb_type != "popup") %>% # Filtering out pop up data, since they will never be homeruns
+  filter(launch_speed >= 85) %>% # Filtering out any balls hit slower than 85 mph, since they will never be homeruns (cutoff is usually 90)
+  select(bearing, inning, outs_when_up, balls, strikes, plate_x, plate_z, pitch_mph, launch_speed, launch_angle, is_home_run, LF_Dim, CF_Dim, RF_Dim, LF_W, CF_W, RF_W, pitch_name, isColorado) %>% # #Keeping only the variables we intuitively and using our knowledge of baseball deemed to be significant in determining whether or not a ball will be a home run
+  mutate(is_home_run = as.factor(is_home_run)) %>% # Ensuring our outcome variable is treated as a factor by R
+  mutate(isColorado = as.factor(isColorado)) # Ensuring our created isColorado variable is treated as a factor by R
+
+homeruns2 %>%
+  count(is_home_run)
+
+1779 / (11406 + 1779)
+```
+# Creating a random forest of 500 decision trees that have a minimum of 2 data points per node, measuring variable importance with the Gini index, and evaluating the forest by its OOB prediction error
+
+```{r}
+set.seed(253)
+rf_spec <- rand_forest()  %>%
+  set_mode("classification") %>%
+  set_engine(engine = "ranger") %>% 
+  set_args(
+    mtry = NULL,
+    trees = 500,
+    min_n = 2,
+    probability = FALSE, 
+    importance = "impurity"
+  )
+
+forest_model <- rf_spec %>% 
+  step_string2factor(all_nominal_predictors()) %>%
+  step_impute_knn(all_predictors()) %>%
+  fit(is_home_run ~ ., data = homeruns2)
+
+forest_model
+```
+
+
+
+# Plotting each predictor in the forest in descending order of their importance and displaying each predictor's importance value
+
+```{r}
+library(vip)
+forest_model %>% 
+  vip(geom = "point", num_features = 20)
+
+forest_model %>%
+  extract_fit_engine() %>%
+  pluck("variable.importance") %>% 
+  sort(decreasing = TRUE)
+
+```
+
+Our main takeaway from this plot is that launch_speed and launch_angle are by far the two most important predictors for our model, with importance values far greater than those of the other predictors. Most of the rest of our predictors have similar importance values. The variable we created to capture the vast difference in elevation between Coors Field in Colorado (which we thought was a potential confounder) and the rest of MLB parks had an importance value of almost 0, which was very surprising to us.
+
+# Evaluating our forest further with its OOB confusion matrix
+
+```{r}
+# OOB confusion matrix
+forest_model %>% 
+  extract_fit_engine() %>% 
+  pluck("confusion.matrix") %>% 
+  t()
+
+8432/ (8432 + 160)
+778 / (778 + 539)
+```
+
+
+# Create and display Shiny app to make classifications based on inputted values for the predictor variables in our model
+
+```{r}
+# Create the server function
+server_Homerun <- function(input, output) {
+  output$homerunPrediction <- renderText({
+    # Create a new_data dataframe with input values
+    new_data <- data.frame(
+      launch_speed = input$launch_speed,
+      launch_angle = input$launch_angle,
+      plate_x = input$plate_x,
+      plate_z = input$plate_z,
+      pitch_mph = input$pitch_mph,
+      pitch_name = input$pitch_name,
+      inning = input$inning,
+      bearing = input$bearing,
+      LF_Dim = input$LF_Dim,
+      RF_Dim = input$RF_Dim,
+      CF_Dim = input$CF_Dim,
+      RF_W = input$RF_W,
+      LF_W = input$LF_W,
+      balls = input$balls,
+      CF_W = input$CF_W,
+      outs_when_up = input$outs_when_up,
+      strikes = input$strikes,
+      isColorado = factor(0, levels = c("0", "1"))
+    )
+    
+    # Make a prediction using the loaded model
+    prediction <- predict(forest_model, new_data)
+    
+    if (prediction == "1") {
+      "Homerun"
+    } else {
+      "Not a Homerun"
+    }
+  })
+  
+  output$outputPlot = renderPlot({
+    ggplot(homeruns2, aes(x=is_home_run, y=launch_angle)) + 
+      geom_jitter(width = 0.2, height = 0) +
+      geom_hline(yintercept=20, color="red") +
+      labs(x="is_home_run", y="launch_angle") +
+      theme_minimal()
+  })
+  
+}
+
+# Create the user interface
+ui_Homerun <- fluidPage(
+  titlePanel("Predicting Homeruns: by Peter, Akshat, Eddie, Hayes"),
+  sidebarLayout(
+    sidebarPanel(
+      h4("Homerun Predictor"),
+      numericInput("launch_speed", "Launch Speed (mph):", min = 50, max = 120, value = 110),
+      numericInput("launch_angle", "Launch Angle (degrees):", min = -90, max = 90, value = 28),
+      sliderInput("plate_x", "Plate_x:", min = -3, max = 3, value = 1),
+      sliderInput("plate_z", "Plate_z:", min = -0.5, max = 5, value = .6),
+      numericInput("pitch_mph", "Pitch Speed (mph):", min = 70, max = 105, value = 95),
+      selectInput("pitch_name", "Pitch Type:", choices = unique(homeruns2$pitch_name)),
+      numericInput("inning", "Inning:", min = 1, max = 9, value = 4),
+      selectInput("bearing", "Bearing:", choices = unique(homeruns2$bearing)),
+      sliderInput("LF_Dim", "LF Dim:", min = 310, max = 355, value = 310),
+      sliderInput("RF_Dim", "RF Dim:", min = 302, max = 353, value = 302),
+      sliderInput("CF_Dim", "CF Dim:", min = 390, max = 420, value = 390),
+      sliderInput("RF_W", "RF Wall:", min = 3, max = 25, value = 5),
+      sliderInput("LF_W", "LF Wall:", min = 4, max = 37, value = 5),
+      sliderInput("CF_W", "RF Wall:", min = 6, max = 25, value = 7),
+      numericInput("balls", "Balls:", min = 0, max = 3, value = 1),
+      numericInput("strikes", "Strikes:", min = 0, max = 2, value = 1),
+      numericInput("outs_when_up", "Outs:", min = 0, max = 2, value = 1),
+      submitButton("Predict")
+    ),
+    mainPanel(
+      h1("Goal:"),
+      h4("The goal of this Shiny app is to take a set of values for predictor variables x provided by the user, and use those values to make an (as accurate as possible) classification of that situation as either a home run or not a home run.)"),
+      h1("Instructions:"),
+      h4("Use the select, slider, or numeric inputs provided to enter desired values for each predictor x. When satisfied with entered values, click ****Predict**** button to obtain pop up screen with classification (possibilities are either home run or not a home run. Some monitors may be too small and make some features not appear as intended, MAXIMIZE the shiny app window."),
+      h5("Warning: Some predictors in the dataset were excluded from our final forest model, therefore the predictions of this shiny app will be incorrect about 7% of the time"),
+      h1("Disclaimer:"),
+      h5("Our model is much more accurate in classifying non-homeruns than home runs, as we can expect our model to correctly classify new data points that are non-homeruns 98% of the time, compared to only 59% for new data points that are homeruns. This is likely because home runs are a very rare occurrence, only occurring 13% of the time in our dataset. Therefore, it is difficult to get this shiny app to predict a home run. We reccomend inputting a very high launch speed, a launch angle between 20-35, and low RF_W and Dim values to increase your chance of getting a home run classification. The predictor values are preset to output a classification of home run to provide an example."),
+      h5("Our forest model has an OOB prediction error of 7.05%, meaning we can expect it to classify 7.05% of new data points incorrectly. Therefore, we can expect it to correctly classify new data points 92.95% of the time. Based on this information, we feel that our model produces reliable and accurate predictions for the majority of new data points."),
+       h2("Homerun Prediction:"),
+      tags$style(HTML("#homerunPrediction {
+        font-size: 3.5rem;
+        text-decoration: underline;
+      }")),
+      textOutput("homerunPrediction"),
+      plotOutput("outputPlot")
+    )
+  )
+)
+
+# Run the Shiny app
+shinyApp(ui = ui_Homerun, server = server_Homerun)
+```
+# Visualizations
+```{r}
+homeruns2 %>%
+  count(is_home_run)
+
+homeruns2 %>%
+  ggplot(aes(y = launch_speed, x = is_home_run)) +
+  geom_jitter() +
+  geom_hline(yintercept = 95, color = 'red')
+```
+
+# Analysis
+
+Mean launch speed appears to be higher for home runs than non home runs, suggesting a positive relationship between launch speed and hitting home runs. Launch speed cut off of 95 mph appears to capture almost every home run in this dataset, but there are also many non home runs that have a launch speed >= 95 mph. 
+
+Conclusion: Launch speed has an impact on whether or not a batted ball will end up being a home run, but it isn't the only factor at play, as evidenced by the multitude of non home runs that have similar launch speeds to the home runs in the dataset.
+
+```{r}
+homeruns2 %>%
+  ggplot(aes(y = launch_angle, x = is_home_run)) +
+  geom_jitter() +
+  geom_hline(yintercept = 20, color = 'red')
+```
+
+# Analysis
+
+There appears to be an optimal launch angle range which contains every home run in the dataset: between 15 and 45 degrees. Outside of that range, there are no instances of home runs, therefore it appears that a ball's launch angle must be in this range to be a home run. A launch angle cut off of 20 degrees captures almost every home run in the dataset, but there are many non home runs that are >= 20 degrees of launch angle as well.
+
+Conclusion: Launch angle has an impact on whether or not a batted ball will end up being a home run, but it isn't the only factor at play, as evidenced by the multitude of non home runs that have similar launch angles to the home runs in the dataset.
+
+
+

@@ -1,0 +1,6 @@
+"0","diamonds_avg_price <- diamonds %>%"
+"0","    group_by(carat) %>%"
+"0","    summarize(avg_price = mean(price)) %>%"
+"0","    arrange(carat)"
+"0","diamonds_avg_price <- diamonds_avg_price[seq(1,nrow(diamonds_avg_price),3),]"
+"0","head(diamonds_avg_price)"

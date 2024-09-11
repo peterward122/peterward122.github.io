@@ -1,0 +1,3 @@
+"0","ggplot(diamonds, aes(x = carat, y = price)) +"
+"0","    geom_point() +"
+"0","    geom_point(data = diamonds_avg_price, aes(x = carat, y = avg_price), color = ""deepskyblue"", size = 3)"
